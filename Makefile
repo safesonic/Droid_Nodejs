@@ -8,8 +8,11 @@ PREFIX ?= /usr/local
 FLAKY_TESTS ?= run
 TEST_CI_ARGS ?=
 STAGINGSERVER ?= node-www
-
 OSTYPE := $(shell uname -s | tr '[A-Z]' '[a-z]')
+
+ifdef JOBS
+  PARALLEL_ARGS = -j $(JOBS)
+endif
 
 ifdef QUICKCHECK
   QUICKCHECK_ARG := --quickcheck
@@ -112,9 +115,9 @@ v8:
 	$(MAKE) -C deps/v8 $(V8_ARCH) $(V8_BUILD_OPTIONS)
 
 test: | cctest  # Depends on 'all'.
+	$(PYTHON) tools/test.py --mode=release message parallel sequential -J
 	$(MAKE) jslint
 	$(MAKE) cpplint
-	$(PYTHON) tools/test.py --mode=release message parallel sequential -J
 
 test-parallel: all
 	$(PYTHON) tools/test.py --mode=release parallel -J
@@ -144,7 +147,7 @@ test/addons/.buildstamp: $(ADDONS_BINDING_GYPS) | test/addons/.docbuildstamp
 	for dirname in test/addons/*/; do \
 		$(NODE) deps/npm/node_modules/node-gyp/bin/node-gyp rebuild \
 			--directory="$$PWD/$$dirname" \
-			--nodedir="$$PWD"; \
+			--nodedir="$$PWD" || exit 1 ; \
 	done
 	touch $@
 
@@ -168,7 +171,8 @@ test-all-valgrind: test-build
 	$(PYTHON) tools/test.py --mode=debug,release --valgrind
 
 test-ci: | build-addons
-	$(PYTHON) tools/test.py -p tap --logfile test.tap --mode=release --flaky-tests=$(FLAKY_TESTS) \
+	$(PYTHON) tools/test.py $(PARALLEL_ARGS) -p tap --logfile test.tap \
+		--mode=release --flaky-tests=$(FLAKY_TESTS) \
 		$(TEST_CI_ARGS) addons message parallel sequential
 
 test-release: test-build
@@ -211,6 +215,8 @@ test-timers:
 test-timers-clean:
 	$(MAKE) --directory=tools clean
 
+
+ifneq ("","$(wildcard deps/v8/tools/run-tests.py)")
 test-v8:
 	# note: performs full test unless QUICKCHECK is specified
 	deps/v8/tools/run-tests.py --arch=$(V8_ARCH) \
@@ -234,6 +240,12 @@ test-v8-benchmarks:
 
 test-v8-all: test-v8 test-v8-intl test-v8-benchmarks
 	# runs all v8 tests
+else
+test-v8 test-v8-intl test-v8-benchmarks test-v8-all:
+	@echo "Testing v8 is not available through the source tarball."
+	@echo "Use the git repo instead:" \
+		"$ git clone https://github.com/nodejs/node.git"
+endif
 
 apidoc_sources = $(wildcard doc/api/*.markdown)
 apidocs = $(addprefix out/,$(apidoc_sources:.markdown=.html)) \
@@ -332,7 +344,15 @@ else
 ifeq ($(DESTCPU),ppc)
 ARCH=ppc
 else
+ifeq ($(DESTCPU),s390)
+ARCH=s390
+else
+ifeq ($(DESTCPU),s390x)
+ARCH=s390x
+else
 ARCH=x86
+endif
+endif
 endif
 endif
 endif
@@ -427,11 +447,15 @@ $(TARBALL): release-only $(NODE_EXE) doc
 	mkdir -p $(TARNAME)/doc/api
 	cp doc/node.1 $(TARNAME)/doc/node.1
 	cp -r out/doc/api/* $(TARNAME)/doc/api/
-	rm -rf $(TARNAME)/deps/v8/{test,samples,tools/profviz} # too big
+	rm -rf $(TARNAME)/deps/v8/{test,samples,tools/profviz,tools/run-tests.py}
 	rm -rf $(TARNAME)/doc/images # too big
 	rm -rf $(TARNAME)/deps/uv/{docs,samples,test}
-	rm -rf $(TARNAME)/deps/openssl/{doc,demos,test}
+	rm -rf $(TARNAME)/deps/openssl/openssl/{doc,demos,test}
 	rm -rf $(TARNAME)/deps/zlib/contrib # too big, unused
+	rm -rf $(TARNAME)/.{editorconfig,git*,mailmap}
+	rm -rf $(TARNAME)/tools/{eslint,eslint-rules,osx-pkg.pmdoc,pkgsrc}
+	rm -rf $(TARNAME)/tools/{osx-*,license-builder.sh,cpplint.py}
+	find $(TARNAME)/ -name ".eslint*" -maxdepth 2 | xargs rm
 	find $(TARNAME)/ -type l | xargs rm # annoying on windows
 	tar -cf $(TARNAME).tar $(TARNAME)
 	rm -rf $(TARNAME)
@@ -572,6 +596,8 @@ bench-all: bench bench-misc bench-array bench-buffer bench-url bench-events benc
 
 bench: bench-net bench-http bench-fs bench-tls
 
+bench-ci: bench
+
 bench-http-simple:
 	benchmark/http_simple_bench.sh
 
@@ -581,8 +607,13 @@ bench-idle:
 	$(NODE) benchmark/idle_clients.js &
 
 jslint:
-	$(NODE) tools/eslint/bin/eslint.js benchmark lib src test tools/doc \
-	  tools/eslint-rules --rulesdir tools/eslint-rules
+	$(NODE) tools/jslint.js -J benchmark lib src test tools/doc \
+	  tools/eslint-rules tools/jslint.js
+
+jslint-ci:
+	$(NODE) tools/jslint.js $(PARALLEL_ARGS) -f tap -o test-eslint.tap \
+		benchmark lib src test tools/doc \
+		tools/eslint-rules tools/jslint.js
 
 CPPLINT_EXCLUDE ?=
 CPPLINT_EXCLUDE += src/node_lttng.cc
@@ -609,7 +640,17 @@ CPPLINT_FILES = $(filter-out $(CPPLINT_EXCLUDE), $(wildcard \
 cpplint:
 	@$(PYTHON) tools/cpplint.py $(CPPLINT_FILES)
 
+ifneq ("","$(wildcard tools/eslint/bin/eslint.js)")
 lint: jslint cpplint
+lint-ci: jslint-ci cpplint
+else
+lint:
+	@echo "Linting is not available through the source tarball."
+	@echo "Use the git repo instead:" \
+		"$ git clone https://github.com/nodejs/node.git"
+
+lint-ci: lint
+endif
 
 .PHONY: lint cpplint jslint bench clean docopen docclean doc dist distclean \
 	check uninstall install install-includes install-bin all staticlib \
@@ -617,4 +658,4 @@ lint: jslint cpplint
 	blog blogclean tar binary release-only bench-http-simple bench-idle \
 	bench-all bench bench-misc bench-array bench-buffer bench-net \
 	bench-http bench-fs bench-tls cctest run-ci test-v8 test-v8-intl \
-	test-v8-benchmarks test-v8-all v8
+	test-v8-benchmarks test-v8-all v8 lint-ci bench-ci jslint-ci
