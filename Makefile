@@ -131,7 +131,7 @@ test/gc/node_modules/weak/build/Release/weakref.node: $(NODE_EXE)
 		--nodedir="$(shell pwd)"
 
 # Implicitly depends on $(NODE_EXE), see the build-addons rule for rationale.
-test/addons/.docbuildstamp: doc/api/addons.markdown
+test/addons/.docbuildstamp: doc/api/addons.md
 	$(RM) -r test/addons/??_*/
 	$(NODE) tools/doc/addon-verify.js
 	touch $@
@@ -247,9 +247,9 @@ test-v8 test-v8-intl test-v8-benchmarks test-v8-all:
 		"$ git clone https://github.com/nodejs/node.git"
 endif
 
-apidoc_sources = $(wildcard doc/api/*.markdown)
-apidocs = $(addprefix out/,$(apidoc_sources:.markdown=.html)) \
-		$(addprefix out/,$(apidoc_sources:.markdown=.json))
+apidoc_sources = $(wildcard doc/api/*.md)
+apidocs = $(addprefix out/,$(apidoc_sources:.md=.html)) \
+		$(addprefix out/,$(apidoc_sources:.md=.json))
 
 apidoc_dirs = out/doc out/doc/api/ out/doc/api/assets
 
@@ -266,10 +266,10 @@ out/doc/api/assets/%: doc/api_assets/% out/doc/api/assets/
 out/doc/%: doc/%
 	cp -r $< $@
 
-out/doc/api/%.json: doc/api/%.markdown $(NODE_EXE)
+out/doc/api/%.json: doc/api/%.md $(NODE_EXE)
 	$(NODE) tools/doc/generate.js --format=json $< > $@
 
-out/doc/api/%.html: doc/api/%.markdown $(NODE_EXE)
+out/doc/api/%.html: doc/api/%.md $(NODE_EXE)
 	$(NODE) tools/doc/generate.js --format=html --template=doc/template.html $< > $@
 
 docopen: out/doc/api/all.html
@@ -484,7 +484,7 @@ doc-upload: tar
 	scp -pr out/doc/ $(STAGINGSERVER):nodejs/$(DISTTYPEDIR)/$(FULLVERSION)/docs/
 	ssh $(STAGINGSERVER) "touch nodejs/$(DISTTYPEDIR)/$(FULLVERSION)/docs.done"
 
-$(TARBALL)-headers: config.gypi release-only
+$(TARBALL)-headers: release-only
 	$(PYTHON) ./configure \
 		--prefix=/ \
 		--dest-cpu=$(DESTCPU) \
@@ -492,7 +492,7 @@ $(TARBALL)-headers: config.gypi release-only
 		--release-urlbase=$(RELEASE_URLBASE) \
 		$(CONFIG_FLAGS) $(BUILD_RELEASE_FLAGS)
 	HEADERS_ONLY=1 $(PYTHON) tools/install.py install '$(TARNAME)' '/'
-	find $(TARNAME)/ -type l | xargs rm # annoying on windows
+	find $(TARNAME)/ -type l | xargs rm -f
 	tar -cf $(TARNAME)-headers.tar $(TARNAME)
 	rm -rf $(TARNAME)
 	gzip -c -f -9 $(TARNAME)-headers.tar > $(TARNAME)-headers.tar.gz
@@ -658,4 +658,5 @@ endif
 	blog blogclean tar binary release-only bench-http-simple bench-idle \
 	bench-all bench bench-misc bench-array bench-buffer bench-net \
 	bench-http bench-fs bench-tls cctest run-ci test-v8 test-v8-intl \
-	test-v8-benchmarks test-v8-all v8 lint-ci bench-ci jslint-ci
+	test-v8-benchmarks test-v8-all v8 lint-ci bench-ci jslint-ci \
+	$(TARBALL)-headers
