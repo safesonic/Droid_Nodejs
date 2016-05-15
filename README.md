@@ -11,11 +11,11 @@ Node.js on Android
 
 - 1:已知问题：node解释器默认位置  
 > NPM及其其她javascript脚本默认调用node解释器位置为/usr/bin/node 或通过/usr/bin/env寻找node解释器位置，但Android目录结构不同于传统Linux造成node解释器调用失败  
-- 执行：```ln -sf /data/data/droid.exploit.toolkit/nodejs-6/usr /usr```
+- 执行：`ln -sf /data/data/droid.exploit.toolkit/nodejs-6/usr /usr`
 
 - 2:HOME环境变量问题  
 > 执行NPM软件包管理需要有效$HOME变量，Android需要重新设定$HOME变量  
-- 执行：```export HOME=/data/data/droid.exploit.toolkit/nodejs-6/HOME/```
+- 执行：`export HOME=/data/data/droid.exploit.toolkit/nodejs-6/HOME/`
 
 
 ### 安装
