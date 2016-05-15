@@ -3,6 +3,11 @@ Node.js on Android
 > ZhuZhiHao  
 > 2016-5-11  
 
+
+![1] (./Screenshot/Screenshot_20160515-154751.png)
+![2] (./Screenshot/Screenshot_20160515-154817.png)
+![3] (./Screenshot/Screenshot_20160515-161006.png)
+
 ### 基于2016-05-5 Version 6.1.0 (Current) 原始代码修改移植。
 
 - 1:已知问题：node解释器默认位置  
